@@ -1,0 +1,85 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: ai-pipeline-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/meeting_ops}
+    username: ${DB_USERNAME:meeting_ops}
+    password: ${DB_PASSWORD:meeting_ops}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: AiPipelineHikariPool
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: ${SHOW_SQL:false}
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: meeting-ops-agent
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.meetingops.*
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:https://auth.meetingops.example.com}
+          jwk-set-uri: ${OAUTH2_JWK_URI:https://auth.meetingops.example.com/.well-known/jwks.json}
+
+langchain4j:
+  open-ai:
+    chat-model:
+      api-key: ${OPENAI_API_KEY:}
+      model-name: ${LLM_MODEL:gpt-4o}
+      temperature: ${LLM_TEMPERATURE:0.2}
+      max-tokens: ${LLM_MAX_TOKENS:4000}
+    embedding-model:
+      api-key: ${OPENAI_API_KEY:}
+      model-name: ${EMBEDDING_MODEL:text-embedding-3-small}
+
+meetingops:
+  mcp:
+    transport: ${MCP_TRANSPORT:http}
+    server:
+      url: ${MCP_SERVER_URL:http://localhost:8084/mcp}
+
+  pipeline:
+    max-retries: ${PIPELINE_MAX_RETRIES:3}
+    retry-backoff-initial: ${PIPELINE_RETRY_BACKOFF:1000}
+    retry-backoff-multiplier: ${PIPELINE_RETRY_MULTIPLIER:2.0}
+
+  extraction:
+    min-confidence: ${EXTRACTION_MIN_CONFIDENCE:0.7}
+    max-items-per-meeting: ${EXTRACTION_MAX_ITEMS:50}
+
+  grounding:
+    max-similar-items: ${GROUNDING_MAX_SIMILAR:5}
+    similarity-threshold: ${GROUNDING_SIMILARITY_THRESHOLD:0.75}
+
+  validation:
+    max-description-length: ${VALIDATION_MAX_DESC_LENGTH:500}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+logging:
+  level:
+    root: INFO
+    com.meetingops: DEBUG
+    dev.langchain4j: DEBUG
