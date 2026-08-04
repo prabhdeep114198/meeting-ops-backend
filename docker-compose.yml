@@ -1,0 +1,68 @@
+services:
+  # PostgreSQL with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: meeting-ops-db
+    environment:
+      POSTGRES_DB: meeting_ops
+      POSTGRES_USER: meeting_ops
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-meeting_ops}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./src/main/resources/db/migration:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meeting_ops -d meeting_ops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Apache Kafka (via KRaft mode)
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: meeting-ops-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: kafka-topics --bootstrap-server localhost:9092 --list
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # MeetingOps Backend Application
+  meeting-ops-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meeting-ops-backend
+    ports:
+      - "8080:8080"
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
+      DB_USERNAME: meeting_ops
+      DB_PASSWORD: ${DB_PASSWORD:-meeting_ops}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-https://auth.meetingops.example.com}
+      OAUTH2_JWK_URI: ${OAUTH2_JWK_URI:-https://auth.meetingops.example.com/.well-known/jwks.json}
+      SERVER_PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+volumes:
+  pgdata:

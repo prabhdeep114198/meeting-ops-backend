@@ -1,0 +1,145 @@
+spring:
+  application:
+    name: meeting-ops-backend
+
+  # Database Configuration
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/meeting_ops}
+    username: ${DB_USERNAME:meeting_ops}
+    password: ${DB_PASSWORD:meeting_ops}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: MeetingOpsHikariPool
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 30000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: ${SHOW_SQL:false}
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+        default_schema: public
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+    consumer:
+      group-id: meeting-ops-agent
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.meetingops.*
+
+  # Jackson Configuration
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+  # Security Configuration (OAuth2 Resource Server)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:https://auth.meetingops.example.com}
+          jwk-set-uri: ${OAUTH2_JWK_URI:https://auth.meetingops.example.com/.well-known/jwks.json}
+
+# LangChain4j Configuration
+langchain4j:
+  open-ai:
+    chat-model:
+      api-key: ${OPENAI_API_KEY:}
+      model-name: ${LLM_MODEL:gpt-4o}
+      temperature: ${LLM_TEMPERATURE:0.2}
+      max-tokens: ${LLM_MAX_TOKENS:4000}
+    embedding-model:
+      api-key: ${OPENAI_API_KEY:}
+      model-name: ${EMBEDDING_MODEL:text-embedding-3-small}
+
+# MCP Server Configuration (Spring AI)
+spring.ai:
+  mcp:
+    server:
+      type: SYNC
+      protocol: STREAMABLE_HTTP
+      name: meeting-ops-mcp
+      version: 1.0.0
+
+# MeetingOps Custom Configuration
+meetingops:
+  mcp:
+    transport: ${MCP_TRANSPORT:http}
+    server:
+      url: ${MCP_SERVER_URL:http://localhost:8081/mcp}
+    transport:
+      stdio:
+        command: ${MCP_STDIO_COMMAND:}
+
+  # Agent Pipeline Configuration
+  pipeline:
+    max-retries: ${PIPELINE_MAX_RETRIES:3}
+    retry-backoff-initial: ${PIPELINE_RETRY_BACKOFF:1000}
+    retry-backoff-multiplier: ${PIPELINE_RETRY_MULTIPLIER:2.0}
+
+  # Extraction Agent Configuration
+  extraction:
+    min-confidence: ${EXTRACTION_MIN_CONFIDENCE:0.7}
+    max-items-per-meeting: ${EXTRACTION_MAX_ITEMS:50}
+
+  # Grounding Agent Configuration
+  grounding:
+    max-similar-items: ${GROUNDING_MAX_SIMILAR:5}
+    similarity-threshold: ${GROUNDING_SIMILARITY_THRESHOLD:0.75}
+
+  # Validation Agent Configuration
+  validation:
+    max-description-length: ${VALIDATION_MAX_DESC_LENGTH:500}
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+
+# Logging Configuration
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.meetingops: ${LOG_LEVEL_APP:DEBUG}
+    dev.langchain4j: ${LOG_LEVEL_LLM:DEBUG}
+    org.springframework.ai: ${LOG_LEVEL_AI:DEBUG}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:WARN}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

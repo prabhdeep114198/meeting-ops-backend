@@ -1,0 +1,30 @@
+# Build output
+target/
+!target/classes/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Maven wrapper (optional)
+.mvn/wrapper/maven-wrapper.jar
