@@ -11,7 +11,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./src/main/resources/db/migration:/docker-entrypoint-initdb.d
+      - ./meeting-service/src/main/resources/db/migration:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U meeting_ops -d meeting_ops"]
       interval: 10s
@@ -41,28 +41,109 @@ services:
       timeout: 10s
       retries: 5
 
-  # MeetingOps Backend Application
-  meeting-ops-backend:
+  # API Gateway
+  api-gateway:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: meeting-ops-backend
+      args:
+        MODULE: api-gateway
+    container_name: meeting-ops-gateway
     ports:
       - "8080:8080"
     environment:
+      SERVER_PORT: 8080
+      MEETING_SERVICE_URL: http://meeting-service:8081
+      REVIEW_SERVICE_URL: http://review-service:8083
+      MCP_SERVICE_URL: http://mcp-service:8084
+    depends_on:
+      - meeting-service
+      - review-service
+      - mcp-service
+
+  # Meeting Service
+  meeting-service:
+    build:
+      context: .
+      args:
+        MODULE: meeting-service
+    container_name: meeting-ops-meeting-service
+    ports:
+      - "8081:8081"
+    environment:
+      SERVER_PORT: 8081
       DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
       DB_USERNAME: meeting_ops
       DB_PASSWORD: ${DB_PASSWORD:-meeting_ops}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
       OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-https://auth.meetingops.example.com}
       OAUTH2_JWK_URI: ${OAUTH2_JWK_URI:-https://auth.meetingops.example.com/.well-known/jwks.json}
-      SERVER_PORT: 8080
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
         condition: service_healthy
+
+  # AI Pipeline Service
+  ai-pipeline-service:
+    build:
+      context: .
+      args:
+        MODULE: ai-pipeline-service
+    container_name: meeting-ops-ai-pipeline-service
+    ports:
+      - "8082:8082"
+    environment:
+      SERVER_PORT: 8082
+      DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
+      DB_USERNAME: meeting_ops
+      DB_PASSWORD: ${DB_PASSWORD:-meeting_ops}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MCP_SERVER_URL: http://mcp-service:8084/mcp
+      OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-https://auth.meetingops.example.com}
+      OAUTH2_JWK_URI: ${OAUTH2_JWK_URI:-https://auth.meetingops.example.com/.well-known/jwks.json}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mcp-service:
+        condition: service_started
+
+  # Review Service
+  review-service:
+    build:
+      context: .
+      args:
+        MODULE: review-service
+    container_name: meeting-ops-review-service
+    ports:
+      - "8083:8083"
+    environment:
+      SERVER_PORT: 8083
+      DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
+      DB_USERNAME: meeting_ops
+      DB_PASSWORD: ${DB_PASSWORD:-meeting_ops}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-https://auth.meetingops.example.com}
+      OAUTH2_JWK_URI: ${OAUTH2_JWK_URI:-https://auth.meetingops.example.com/.well-known/jwks.json}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  # MCP Service
+  mcp-service:
+    build:
+      context: .
+      args:
+        MODULE: mcp-service
+    container_name: meeting-ops-mcp-service
+    ports:
+      - "8084:8084"
+    environment:
+      SERVER_PORT: 8084
 
 volumes:
   pgdata:
