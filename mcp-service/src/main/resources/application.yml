@@ -1,0 +1,26 @@
+server:
+  port: ${SERVER_PORT:8084}
+
+spring:
+  application:
+    name: mcp-service
+
+  ai:
+    mcp:
+      server:
+        type: SYNC
+        protocol: STREAMABLE_HTTP
+        name: meeting-ops-mcp
+        version: 1.0.0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+logging:
+  level:
+    root: INFO
+    com.meetingops: DEBUG
+    org.springframework.ai: DEBUG
