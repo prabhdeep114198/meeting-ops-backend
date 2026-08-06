@@ -34,7 +34,7 @@ The application is decomposed into decoupled, specialized microservices managed 
 | **`meeting-service`** | `8081` | Ingests meeting transcripts, manages meeting lifecycle, publishes Kafka events | Spring Web, Spring Kafka, Flyway |
 | **`ai-pipeline-service`** | `8082` | Listens to Kafka meeting events, executes AI extraction, grounding (pgvector), validation & drafting agents | LangChain4j, pgvector, Kafka |
 | **`review-service`** | `8083` | Manages human review queue, audit decisions, and bulk approvals | Spring Web, Spring Data JPA |
-| **`mcp-service`** | `8084` | Spring AI MCP Server hosting Calendar, Email, and TaskTracker execution tools | Spring AI MCP Server |
+| **`mcp-service`** | `8084` | FastMCP Python Server hosting Calendar, Email, and TaskTracker execution tools | FastMCP, Uvicorn, Pydantic |
 
 ## Key Technologies
 

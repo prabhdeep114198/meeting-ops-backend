@@ -133,12 +133,11 @@ services:
       kafka:
         condition: service_healthy
 
-  # MCP Service
+  # FastMCP Service
   mcp-service:
     build:
-      context: .
-      args:
-        MODULE: mcp-service
+      context: ./mcp-service
+      dockerfile: Dockerfile
     container_name: meeting-ops-mcp-service
     ports:
       - "8084:8084"
