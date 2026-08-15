@@ -21,9 +21,17 @@ Thumbs.db
 logs/
 *.log
 
-# Environment
+# Environment & Secrets
 .env
+.env.*
+!.env.example
+*.env
+*.secret
+*.pem
+*.key
 .env.local
+.env.development
+.env.test
 .env.production
 
 # Maven wrapper (optional)

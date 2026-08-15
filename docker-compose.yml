@@ -5,15 +5,15 @@ services:
     container_name: meeting-ops-db
     environment:
       POSTGRES_DB: meeting_ops
-      POSTGRES_USER: meeting_ops
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-meeting_ops}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./meeting-service/src/main/resources/db/migration:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U meeting_ops -d meeting_ops"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d meeting_ops"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -72,8 +72,8 @@ services:
     environment:
       SERVER_PORT: 8081
       DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
-      DB_USERNAME: meeting_ops
-      DB_PASSWORD: ${DB_PASSWORD:-meeting_ops}
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-https://auth.meetingops.example.com}
       OAUTH2_JWK_URI: ${OAUTH2_JWK_URI:-https://auth.meetingops.example.com/.well-known/jwks.json}
@@ -95,8 +95,8 @@ services:
     environment:
       SERVER_PORT: 8082
       DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
-      DB_USERNAME: meeting_ops
-      DB_PASSWORD: ${DB_PASSWORD:-meeting_ops}
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       MCP_SERVER_URL: http://mcp-service:8084/mcp
@@ -122,8 +122,8 @@ services:
     environment:
       SERVER_PORT: 8083
       DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
-      DB_USERNAME: meeting_ops
-      DB_PASSWORD: ${DB_PASSWORD:-meeting_ops}
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-https://auth.meetingops.example.com}
       OAUTH2_JWK_URI: ${OAUTH2_JWK_URI:-https://auth.meetingops.example.com/.well-known/jwks.json}
