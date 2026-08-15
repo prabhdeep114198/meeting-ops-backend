@@ -37,18 +37,29 @@ CREATE INDEX IF NOT EXISTS idx_meetings_status_lookup
 ON meetings (organization_id, status) 
 INCLUDE (title, meeting_date);
 
--- 6. Upgrade pgvector embedding index to HNSW (Hierarchical Navigable Small World)
-DROP INDEX IF EXISTS idx_embeddings_vector;
-
-CREATE INDEX IF NOT EXISTS idx_embeddings_hnsw_cosine 
-ON meeting_embeddings 
-USING hnsw (embedding vector_cosine_ops) 
-WITH (m = 16, ef_construction = 64);
+-- 6. Upgrade pgvector embedding index to HNSW (Hierarchical Navigable Small World) if available
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_am WHERE amname = 'hnsw') THEN
+        DROP INDEX IF EXISTS idx_embeddings_vector;
+        CREATE INDEX IF NOT EXISTS idx_embeddings_hnsw_cosine 
+        ON meeting_embeddings 
+        USING hnsw (embedding vector_cosine_ops) 
+        WITH (m = 16, ef_construction = 64);
+    END IF;
+END $$;
 
 -- 7. Range Partitioning Setup for high-volume agent_traces (Monthly Partitions)
 -- Create partition table if agent_traces partition strategy is enabled
-CREATE TABLE IF NOT EXISTS agent_traces_y2026m08 PARTITION OF agent_traces
-    FOR VALUES FROM ('2026-08-01 00:00:00+00') TO ('2026-09-01 00:00:00+00');
+DO $$ BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_partitioned_table pt
+        JOIN pg_class c ON pt.partrelid = c.oid
+        WHERE c.relname = 'agent_traces'
+    ) THEN
+        CREATE TABLE IF NOT EXISTS agent_traces_y2026m08 PARTITION OF agent_traces
+            FOR VALUES FROM ('2026-08-01 00:00:00+00') TO ('2026-09-01 00:00:00+00');
 
-CREATE TABLE IF NOT EXISTS agent_traces_y2026m09 PARTITION OF agent_traces
-    FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00');
+        CREATE TABLE IF NOT EXISTS agent_traces_y2026m09 PARTITION OF agent_traces
+            FOR VALUES FROM ('2026-09-01 00:00:00+00') TO ('2026-10-01 00:00:00+00');
+    END IF;
+END $$;

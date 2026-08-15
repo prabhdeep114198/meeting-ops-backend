@@ -3,9 +3,19 @@
 -- PostgreSQL with pgvector extension
 -- ============================================================
 
--- Enable pgvector extension for RAG embedding storage
+-- Enable extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+DO $$ BEGIN
+    BEGIN
+        CREATE EXTENSION IF NOT EXISTS vector;
+    EXCEPTION WHEN OTHERS THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'vector') THEN
+            CREATE DOMAIN vector AS double precision[];
+        END IF;
+    END;
+END $$;
 
 -- ============================================================
 -- Table: organizations
@@ -153,10 +163,14 @@ CREATE TABLE meeting_embeddings (
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     metadata_id     UUID NOT NULL,
     content         TEXT NOT NULL,
-    embedding       vector(1536),
+    embedding       vector,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_embeddings_org ON meeting_embeddings(organization_id);
 CREATE INDEX idx_embeddings_metadata ON meeting_embeddings(organization_id, metadata_id);
-CREATE INDEX idx_embeddings_vector ON meeting_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_am WHERE amname = 'ivfflat') THEN
+        CREATE INDEX idx_embeddings_vector ON meeting_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+    END IF;
+END $$;
