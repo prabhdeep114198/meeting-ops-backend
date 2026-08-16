@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: meeting_ops
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -14,6 +14,18 @@ services:
       - ./meeting-service/src/main/resources/db/migration:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d meeting_ops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Centralized API Gateway Rate Limiting & Distributed Caching
+  redis:
+    image: redis:7.2-alpine
+    container_name: meeting-ops-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -33,6 +45,7 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     ports:
       - "9092:9092"
     healthcheck:
@@ -41,7 +54,32 @@ services:
       timeout: 10s
       retries: 5
 
-  # API Gateway
+  # Automated Kafka Partitioned Topic & DLQ Provisioning
+  kafka-init-topics:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: meeting-ops-kafka-init-topics
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: [ "/bin/sh", "-c" ]
+    command: |
+      "
+      # Create partitioned topics (3 partitions each)
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic meeting.captured --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic meeting.captured.DLQ --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic meeting.transcribed --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic meeting.transcribed.DLQ --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic meeting.extracted --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic meeting.extracted.DLQ --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic draft.created --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic draft.created.DLQ --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic action.decided --partitions 3 --replication-factor 1
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic action.decided.DLQ --partitions 3 --replication-factor 1
+      
+      echo 'Successfully provisioned all 5 core partitioned topics and 5 DLQ topics.'
+      "
+
+  # Spring Cloud API Gateway (Port 8080)
   api-gateway:
     build:
       context: .
@@ -55,10 +93,15 @@ services:
       MEETING_SERVICE_URL: http://meeting-service:8081
       REVIEW_SERVICE_URL: http://review-service:8083
       MCP_SERVICE_URL: http://mcp-service:8084
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-https://auth.meetingops.example.com}
+      OAUTH2_JWK_URI: ${OAUTH2_JWK_URI:-https://auth.meetingops.example.com/.well-known/jwks.json}
     depends_on:
       - meeting-service
       - review-service
       - mcp-service
+      - redis
 
   # Meeting Service
   meeting-service:
@@ -73,7 +116,7 @@ services:
       SERVER_PORT: 8081
       DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
       DB_USERNAME: postgres
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-https://auth.meetingops.example.com}
       OAUTH2_JWK_URI: ${OAUTH2_JWK_URI:-https://auth.meetingops.example.com/.well-known/jwks.json}
@@ -96,7 +139,7 @@ services:
       SERVER_PORT: 8082
       DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
       DB_USERNAME: postgres
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       MCP_SERVER_URL: http://mcp-service:8084/mcp
@@ -123,7 +166,7 @@ services:
       SERVER_PORT: 8083
       DB_URL: jdbc:postgresql://postgres:5432/meeting_ops
       DB_USERNAME: postgres
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-https://auth.meetingops.example.com}
       OAUTH2_JWK_URI: ${OAUTH2_JWK_URI:-https://auth.meetingops.example.com/.well-known/jwks.json}
