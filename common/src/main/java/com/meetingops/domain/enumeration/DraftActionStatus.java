@@ -3,26 +3,28 @@ package com.meetingops.domain.enumeration;
 /**
  * Enumeration of draft action lifecycle statuses.
  *
- * <p>Tracks the state of a draft action from creation through human review
- * and final execution against external systems.</p>
+ * <p>Enforces the Human-in-the-Loop review state machine.</p>
  *
  * @author MeetingOps Team
  * @since 1.0.0
  */
 public enum DraftActionStatus {
 
-    /** The draft action has been generated and is pending review. */
+    /** Action has been drafted by the agent and awaits human review. */
     DRAFTED,
 
-    /** The draft action has been approved by a reviewer. */
+    /** Human reviewer approved the action as drafted. */
     APPROVED,
 
-    /** The draft action has been edited by a reviewer before approval. */
+    /** Human reviewer edited the action before approval. */
     EDITED,
 
-    /** The draft action has been rejected by a reviewer. */
+    /** Human reviewer rejected the draft action. */
     REJECTED,
 
-    /** The draft action has been executed against the external system. */
-    EXECUTED
+    /** Approved action has been successfully dispatched to the external system (via MCP). */
+    EXECUTED,
+
+    /** Dispatch to external system failed. */
+    FAILED
 }
