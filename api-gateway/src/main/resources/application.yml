@@ -4,31 +4,131 @@ server:
 spring:
   application:
     name: api-gateway
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 2000ms
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:https://auth.meetingops.example.com}
+          jwk-set-uri: ${OAUTH2_JWK_URI:https://auth.meetingops.example.com/.well-known/jwks.json}
+
   cloud:
     gateway:
+      # -------------------------------------------------------------
+      # Global Dynamic CORS Configuration
+      # -------------------------------------------------------------
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:3000"
+              - "http://127.0.0.1:3000"
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            exposedHeaders:
+              - "X-Org-ID"
+              - "X-User-ID"
+              - "X-User-Role"
+              - "X-RateLimit-Remaining"
+              - "X-RateLimit-Replenish-Rate"
+              - "X-RateLimit-Burst-Capacity"
+            allowCredentials: true
+            maxAge: 3600
+
+      # -------------------------------------------------------------
+      # Route Predicates & Downstream Microservices
+      # -------------------------------------------------------------
       routes:
+        # Meeting Service (Port 8081) - Ingestion & Core Lifecycle
         - id: meeting-service
           uri: ${MEETING_SERVICE_URL:http://localhost:8081}
           predicates:
-            - Path=/api/v1/meetings/**
+            - Path=/api/v1/meetings/**, /api/v1/orgs/**, /api/v1/users/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@tenantKeyResolver}"
 
+        # Review Service (Port 8083) - HITL Review Queue & Decisions
         - id: review-service
           uri: ${REVIEW_SERVICE_URL:http://localhost:8083}
           predicates:
             - Path=/api/v1/review-queue/**, /api/v1/draft-actions/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+                key-resolver: "#{@tenantKeyResolver}"
 
+        # MCP Service (Port 8084) - FastMCP Execution Tool Server
         - id: mcp-service
           uri: ${MCP_SERVICE_URL:http://localhost:8084}
           predicates:
             - Path=/mcp/**
 
+        # Capture Service (Port 8085) - Bot Join & Calendar Sync
+        - id: capture-service
+          uri: ${CAPTURE_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/v1/capture/**, /api/v1/integrations/calendar/**
+
+        # Transcription Service (Port 8086) - Speech-to-Text & Diarization
+        - id: transcription-service
+          uri: ${TRANSCRIPTION_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/v1/transcription/**
+
+        # QA Service (Port 8087) - Conversational RAG Meeting Assistant
+        - id: qa-service
+          uri: ${QA_SERVICE_URL:http://localhost:8087}
+          predicates:
+            - Path=/api/v1/qa/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 30
+                redis-rate-limiter.burstCapacity: 60
+                key-resolver: "#{@tenantKeyResolver}"
+
+        # Engagement Service (Port 8088) - Privacy-Preserving Analytics
+        - id: engagement-service
+          uri: ${ENGAGEMENT_SERVICE_URL:http://localhost:8088}
+          predicates:
+            - Path=/api/v1/engagement/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 40
+                redis-rate-limiter.burstCapacity: 80
+                key-resolver: "#{@tenantKeyResolver}"
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,gateway
+  endpoint:
+    gateway:
+      enabled: true
 
 logging:
   level:
     root: INFO
-    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+    com.meetingops.gateway: DEBUG
